@@ -1,0 +1,23 @@
+# dependencies
+**/node_modules/
+
+# build output
+**/dist/
+frontend/.next/
+frontend/out/
+
+# env files
+.env
+.env.local
+**/.env
+!.env.example
+!**/.env.example
+
+# OS junk
+.DS_Store
+__MACOSX/
+
+# misc
+*.log
+*.tsbuildinfo
+frontend/next-env.d.ts
