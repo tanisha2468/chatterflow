@@ -17,6 +17,7 @@ Backend:
 - TypeScript
 - MongoDB
 - JWT Authentication
+- Redis (used for temporary OTP storage with TTL expiration)
 - RabbitMQ (for mail service)
 - Cloudinary (for media handling)
 
