@@ -1,0 +1,855 @@
+first of all we made 3 diff folders in the backend folder for chat, user and mail(otp service)
+
+then we installed typescript
+typescript? TypeScript is just JavaScript with strict rules. TypeScript is a "superset" of JavaScript.
+
+npm i -g typescript: This installs the TypeScript Compiler on the entire computer (-g means global)Since our computer can't run TypeScript directly (browsers & Node.js only understand js), we need this tool to convert (.ts) files into (.js) files
+
+npx tsc --init: This creates a file called tsconfig.json : This is the "rulebook" for our project. it tells the compiler things like:
+Which version of JavaScript to convert to.
+How strict the rules should be. etc
+
+so basically, TypeScript = JavaScript + Rules
+-Compiler = The tool that turns those rules back into normal js so it can run
+-Config = The settings that tell the compiler how to behave
+
+then we used this line:
+npm i -D @types/express @types/mongoose @types/dotenv nodemon concurrently
+
+-D: This flag tells npm to save these as devDependencies: they are the packages we need & depend upon in development phase
+This means they are only used during coding and testing i.e development phase, not when the app is actually running live on a server. the tools you use to build, test, and run the project while you are writing the code.
+Think of them like the construction equipment (cranes, blueprints) used to build a house. Once the house is finished and people move in, you don't need the crane sitting in the yard anymore
+
+@types: basically translation tool
+Most of the popular tools you're using, like Express and Mongoose, were originally written in plain js. js doesn't use "types"—it doesn't care if a variable is a string, a number, or a list.
+TypeScript, however, is very strict. It needs to know the "shape" of everything to help avoid bugs
+
+When you install @types/express, you are downloading a Definition File.
+Without it: TypeScript looks at Express and says, "I don't know what this is or how to use it safely."
+With it: TypeScript reads the manual and knows exactly what functions exist inside Express, what data they expect, and what they will return.
+
+-Why they go in Dev Dependencies (-D)
+You only need these "manuals" while you are writing the code in your editor.
+Once you compile your TypeScript into JavaScript to run it on a server (like AWS), the "rules" are already checked. The actual live server doesn't need the manuals; it just needs the actual library (Express) to do the work.
+-You need the booklet while you're building the house in your room (Development), but you don't need to keep the booklet inside the house once people move in (Production).
+
+concurrently: instead of opening 2 separate terminal windows,concurrently allows us to run multipl cmds at the same time in a single terminal
+
+then we added these things in package.json file:
+-> "build": "tsc",
+//It runs the TypeScript Compiler (tsc) once.
+It takes all your .ts files from the src folder and converts them into .js files in the dist folder.
+use this when you are finished coding and want to create the final version of the app to put on a real server.
+
+-> "start": "node dist/index.js",
+//It uses standard Node.js to run the converted js file located in your dist folder.
+
+-> "dev": "concurrently \"tsc -w\" \"nodemon dist/index.js\""
+//tsc -w: The -w stands for Watch. It keeps the TypeScript compiler open and instantly converts your code to js every time you hit "Save."
+//nodemon dist/index.js: This tells nodemon to watch that dist folder. As soon as the compiler updates a file, nodemon restarts the server.
+//concurrently: This ties them together so they both run in the same terminal window.
+
+we make index.ts in src folder and the tsc looks for that and in dist folder creates an index.js, the translated version of the same.
+we setup .env file
+then db.ts file in src/config folder where we setup the connection
+
+then src/model folder we make a user.ts file
+// export interface IUser extends Document {
+    name: string;
+    email: string;
+  }
+
+we are exporting an interface(contract) : defines the shape of a user object in our code
+-extends Document: By extending Mongoose's Document, you tell TypeScript that this object will also have built-in Mongoose properties like ._id and .save().
+Now, if you try to type user.username instead of user.name, TypeScript will highlight it in red because username isn't in your contract.
+
+// const schema: Schema<IUser> = new Schema({ ... });
+You are telling Mongoose: "This schema must follow the rules I laid out in the IUser interface." It links your TypeScript rules to your MongoDB structure.
+
+// {timestamps: true,}
+It automatically adds two fields to our db: createdAt &updatedAt. You don't have to manually manage dates anymore!
+
+//export const User = mongoose.model<IUser>("User", schema);
+This creates the actual "tool" you’ll use to talk to the db. The <IUser> part ensures that every time you find a user, TypeScript knows exactly what properties (name, email) that user has.
+
+1. The Interface (IUser)
+Think of this as a Blueprint or a Recipe.
+Before you make a "User," you tell the computer: "A User MUST have a name (which is text) & an email (which is text)"
+-If you later try to give a user a "phone number" but forgot to add it to the blueprint, the computer will stop you immediately.
+The Document part: This just tells TypeScript, "Hey, this isn't just any object; it's a special MongoDB object that has extra powers (like being able to save itself to a database)."
+
+2. The Schema (Schema<IUser>)
+If the Interface is the recipe, the Schema is the Kitchen Rules.
+MongoDB doesn't know about TypeScript. So, the Schema translates your rules for the database. You're saying: "MongoDB, when you save this, make sure the name is there and the email is unique so no two people have the same one."
+
+3. The Model (User)
+The Interface and Schema are just rules. The Model is the actual tool you use in your controllers to do things like: User.create(), User.find()
+
+-Why this "Double Work"?
+Interface: Protects you while you write code (editor level)
+Schema: Protects your data inside the db (db level)
+
+also why are we using "<IUser>" like here: Schema<IUser> = new.... and mongoose.model<IUser> ??
+
+The <IUser> notation is called a Generic. In TypeScript, it acts like a label or a "hint" that tells Mongoose exactly which Interface it should follow for this specific Schema or Model.
+
+Interface (IUser): The list of rules.
+Generics (<IUser>): The "glue" that attaches those rules to Mongoose.
+
+now otp system building:
+Redis is a super-fast, in-memory database. While MongoDB stores data on a disk (like your computer's hard drive), Redis stores it in the RAM. This makes it incredibly quick for tasks that need to happen in milliseconds.
+
+In chat app, Redis is being used to store OTPs because:
+-Speed: When a user enters an OTP, you want the check to be instant.
+-Auto-Expiration: Redis has a built-in "Time to Live" (TTL) feature. You can tell Redis to store an OTP and automatically delete it after 5 minutes.
+
+-What is Upstash? a cloud service that hosts Redis for us. you do not have to go through the complex process of installing redis on your system.
+Upstash makes it "Serverless," meaning you just get a URL, plug it into your code, and it works.
+MongoDB is great for long-term data (Users, Messages), but for "disposable" data like OTPs, Redis is the industry standard.
+
+* the OTP Workflow
+Request: User asks to log in.
+Generate: our server creates a 6-digit OTP.
+Store (Redis): The server saves the OTP to Upstash with a 300-second (5-minute) timer.
+Verify: When the user types the code, the server checks Redis. If it matches, they're in! If they wait too long, Redis has already auto-deleted the code, and the login fails.
+
+setup: go to Upstash and after creating an account choose ioredis library & copy the redis url in it and paste in .env
+
+after that: npm i redis and npm i -D @types/redis
+
+now in our index.ts file -> 
+1. Initializing the Client:
+-> import { createClient } from "redis";
+  export const redisClient = createClient({
+    url: process.env.REDIS_URL as string,
+  });
+
+-createClient: This function creates a new Redis client instance. doesn't connect yet; just prepares the config
+-url: connection string 
+-as string: This is a TypeScript Type Assertion. Since process.env.REDIS_URL could technically be undefined TypeScript would normally throw an error. Adding as string tells the compiler, "Trust me, I know this will be a string at runtime."
+-export: This allows you to import redisClient into other files to perform operations like set or get.
+
+2. Establishing the connection
+-> redisClient.connect()
+you must explicitly call .connect(). This is an asynch operation that returns a Promise
+
+3. Handling the Outcome using "then catch"
+
+now next we can make routes and controllers folder inside src
+inside routes and controllers both we can make user.ts and then in index.ts we will import route made in routes/user.ts as userRoute and use app.use("/api/v1", userRoute) to direct it on that api call. now inside the contollers/user.ts we will wirte the actual logic that will be followed upon redirection
+
+for sending otp message we need "Rabbit mq"
+It is a Message Broker. Instead of your "User Service" directly trying to send an email (which is slow), it just writes a "to-do note" and drops it into a Queue. RabbitMQ holds that note until your "Mail Service" is ready to pick it up and actually send the email.
+
+Docker overview:
+
+1. The Image (The "Business in a Box")
+Imagine the company sends you a giant, heavy wooden crate. Inside that crate is everything you need to run the shop: The exact stove they use, The pre-measured spices, The employee uniforms, The instruction manual for the manager.
+This crate is the Image. It is "frozen." You can't change what's inside. It’s just sitting in your parking lot, ready to go. If you buy 100 crates, every single shop will be identical because they came from the same blueprint.
+
+2. The Container (The "Actual Shop")
+Now, you open the crate and set everything up in a building. You turn on the stove, the employees put on the uniforms, and you start flipping burgers.
+This living, breathing, working shop is the Container.
+If the stove in your shop breaks, it doesn't break the stove in the "crate" (the Image).
+You can "close" the shop (stop the container) and "re-open" it from the crate whenever you want, and it will be brand new again.
+
+3. Docker Hub (The "Headquarters Catalog")
+Imagine there is a website where you can order these crates.
+You need a Fries Station? You order the "Official McCain Fries Crate."
+
+This catalog is Docker Hub. This is exactly why we are using it for RabbitMQ. Instead of building a "Messaging System" from scratch on our Mac, we just went to the "Catalog" (Docker Hub) and "ordered" the official RabbitMQ crate.
+
+Why is this better?
+Before Docker, if you wanted to run a Burger Shop, you had to find your own stove, buy your own spices, and hire a manager who might do things differently than you. It was a mess.
+but with Docker:
+It’s fast: You just "download the crate" and you're in business.
+It’s clean: When you're done with your project, you just delete the "shop" (container). It doesn't leave any grease or mess on your actual computer.
+It’s consistent: If the "Burger crate" works on your MacBook Air M1, it will work exactly the same on a giant server in a data center.
+
+gist:
+Image: The "Blueprint" or "Frozen Crate."
+Container: The "Running App" or "Working Shop."
+Docker Hub: The "App Store" for these crates.
+
+therefore, Instead of spending hours fixing installation errors on our own computer, we just "downloads the crate" for RabbitMQ and get to work immediately.
+
+run this in terminal:
+// docker run -d --hostname rabbitmq-host --name rabbitmq-container -e RABBITMQ_DEFAULT_USER=admin -e RABBITMQ_DEFAULT_PASS=admin123 -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+
+This command is how we "open the crate" and start the RabbitMQ shop on our computer.
+
+1. docker run -d: This tells Docker to start a new container.
+-d part: This stands for "detached" mode. It means the container will run in the background. It’s like turning on the kitchen lights and then walking out—the kitchen stays on while you go do other things in your terminal.
+
+2. --hostname rabbitmq-host: This gives the "digital box" its own name inside the network. It's like giving your shop an official mailing address.
+
+3. --name rabbitmq-container: This is a nickname for you to use in Docker. If you want to stop the shop later, you just say-> docker stop rabbitmq-container
+
+4. -e RABBITMQ_DEFAULT_USER=admin & -e RABBITMQ_DEFAULT_PASS=admin123: The -e stands for Environment Variable. You are setting the "Master Key" (Username and Password) for your RabbitMQ dashboard. You'll need these to log in and see your messages.
+
+5. -p 5672:5672: This connects your computer to the container. Port 5672 is the "back door" that your code uses to send messages. Only your Node.js/TypeScript code (the "Courier") can access it.
+The Purpose: This gate is designed for machines to talk to machines at lightning speed. It is strictly for dropping off and picking up "packages" (the OTP messages).
+
+6. -p 15672:15672: This opens the "front door" for you. Who uses it? Only You (the Human Developer). Port 15672 is for the Management Dashboard. If you type localhost:15672 in your Chrome browser, you’ll see a cool website where you can see how many messages are in the queue, who is connected, and if there are any errors.
+
+7. rabbitmq:3-management: This is the name of the "Crate" (Image) we are ordering from Docker Hub.
+The "management" part: This is a special version that includes the visual dashboard. If he just said rabbitmq, you wouldn't get the cool website to look at!
+What happens after you run this?
+Docker will look for the RabbitMQ crate on our Mac. Since we don't have it yet, it will automatically download it from Docker Hub.
+
+Why do we need BOTH doors?
+If we only had the Back Door (5672):
+app would work perfectly, but we would be "blind". we wouldn't know if an OTP was actually sent or if the queue was stuck unless we wrote even more code to check.
+If we only had the Front Door (15672):
+we could see the beautiful dashboard in our browser, but Node.js code would be "locked out". It wouldn't have a way to actually deliver the OTPs to the system.
+
+now through thsi we have made teh physical shop but what about the software?
+Think of it this way: You have used Docker to build and open the "RabbitMQ Courier Shop" in your neighborhood. You even built the "Back Door Tunnel" (Port 5672) so people can get in.
+But right now, your Node.js code is like a person standing outside that tunnel who doesn't speak the language used inside the shop.
+
+Why need amqplib:
+amqplib is the Translator or the Driver that allows your JavaScript/TypeScript code to actually talk to RabbitMQ.
+-Docker provides the Hardware (The Shop).
+-amqplib provides the Software (The Phone).
+
+*/ Without this package, your Node.js app has no idea how to "connect" to that port, how to "send" a message, or how to "listen" for one. It’s just like how you needed mongoose to talk to MongoDB or redis to talk to Upstash. /*
+
+so, amqplib is a popular, Node.js library for interacting with RabbitMQ and other message brokers using the AMQP 0-9-1 protocol. allowing developers to create connections, channels, and exchange messages, basically to talk to the the rabbitmq we need this library.
+so to install it go to npm website and install using-> npm i amqplib and also install the @types version in devDependencies
+
+now make rabbitmq.ts in config folder:
+1. The Imports and Setup
+*import amqp from "amqplib" -> This pulls in the library we just installed. It provides all the functions needed to communicate with RabbitMQ.
+
+*let channel: amqp.Channel -> This creates a variable to hold our "Communication Line."
+The TypeScript Part: : amqp.Channel is a Type Annotation. It tells TypeScript exactly what "shape" this variable will be, so it can give you helpful suggestions like .sendToQueue() later.
+
+2. The Connection Function
+* export const connectRabbitMQ = async () => { ... }:
+We use export so index.ts can run this function when the server starts. We use async because connecting to a database takes time
+
+3. Establishing the Physical Link
+* const connection = await amqp.connect({ ... }): This is the "Handshake." our code is reaching out to the Docker container.
+
+* protocol: "amqp": The standard language RabbitMQ speaks.
+* hostname: This will be localhost (your Mac) or the name of our Docker container.
+* port: 5672: This is that "Back Door" service entrance we talked about!
+* username & password: These are the "Master Keys" we set in the docker run command (admin and admin123).
+
+4. Opening the "Counter" (The Channel)
+*channel = await connection.createChannel(); -> A Connection is the big pipe between app and RabbitMQ.
+A Channel is a specific "Chat Window" or "Counter" inside that pipe.
+Why do this? Opening a big pipe is "expensive" for the computer's memory. Instead of opening 100 pipes, we open one connection and run many lightweight channels through it to handle different tasks.
+
+5. Success and Safety using (Try/Catch)
+
+now next up we will add the main function that is this specific function is the actual act of handing over a package to the courier.
+1. The Function Signature:
+//publishToQueue = async (queueName: string, message: any):
+queueName: This is the "Destination Address." In our case, it will be "send-otp"
+message: This is the "Package Content"—the object containing the user's email and the 6-digit OTP.
+
+2. The Safety Guard
+if(!channel) { ... }: If you try to send a message before the connection is ready, it prints a warning instead of crashing your whole server.
+
+3. The "Assert" (Checking the Line)
+//await channel.assertQueue(queueName, {durable: true});
+assertQueue: This is like saying, "Hey, does the 'send-otp' box exist? If not, create it right now".
+durable: true: It tells RabbitMQ: "If the Docker container restarts or the power goes out, don't lose this queue. Keep it saved on the disk".
+
+4. Sending the Package
+channel.sendToQueue(...): This is the moment the message is actually "pushed" into RabbitMQ.
+Buffer.from(JSON.stringify(message)): RabbitMQ doesn't understand JavaScript objects; it only understands "raw data" (Binary/Bytes). We turn object into a string, then turn that string into a Buffer (a series of 1s and 0s) so it can travel through the "tunnel" safely.
+persistent: true: This works with durable. It tells RabbitMQ to save this specific message to the disk. If the server crashes after you send the OTP but before the Mail Service picks it up, the message will still be there when the server comes back online.
+
+
+* Setting Up the Mail Service (The Consumer)
+1. Initialize the Service
+Because this is a Microservice, it acts like a completely separate project.
+Step 1: Open your terminal inside the mail folder.
+Step 2: Run npm init -y to create a new package.json just for this service.
+Step 3: Install the "Manuals" and Tools (Dev Dependencies):
+npm i -D typescript @types/node @types/express @types/amqplib @types/nodemailer nodemon concurrently
+Step 4: Install the "Action" Tools (Main Dependencies):
+npm i express dotenv amqplib nodemailer.
+
+2. Configure TypeScript
+Run npx tsc --init to create your tsconfig.json.
+Important: Open tsconfig.json and ensure these settings are active so the "Translator" knows where to put your files:
+"rootDir": "./src" (Where you write code).
+"outDir": "./dist" (Where the translated JS goes).
+
+3. Create the Folder Structure
+Inside the mail folder, create a src folder.
+Inside src, create an index.ts file.
+This index.ts is the Heart of the Mail Service. Its only job is to: Connect to RabbitMQ, Listen to the send-otp queue, Send an actual email whenever a message arrives.
+
+4. Setup the "Dev" Script
+In your mail/package.json, update the scripts so you can run the compiler and the server at the same time:
+"scripts": {
+  "build": "tsc",
+  "dev": "concurrently \"tsc -w\" \"nodemon dist/index.js\""
+}
+also run tsc command to make the dist folder.
+
+Why we do this separately?
+By giving the Mail folder its own node_modules and package.json, you ensure that if you ever want to move this service to a different server (like if your chat app gets millions of users), you can just copy this one folder and it will have everything it needs to run.
+
+now in src folder make a file consumer.ts
+we import amqplib to interact with dockers' downloaded create/app which is rabbitmq, and nodemailer for sending the mail, dotenv
+
+make a function startSendOtpConsumer and in it amqp.connect({ ... }): Just like in User Service, the Mail Service has to drive to the RabbitMQ (the Docker container) and walk through the Port 5672 "Service Entrance".
+connection.createChannel(): It opens a specific "Customer Window" (the channel) where it can wait for incoming mail.
+
+now Waiting for Work (The Queue)
+await channel.assertQueue(queueName, { durable: true }): It checks: "Is there a box labeled send-otp here?". The durable: true ensures that even if the shop closes and re-opens, the box and its contents won't be lost.
+channel.consume(...): most important part. It tells the service: "Sit here and wait. Every time a new message falls into the send-otp box, grab it and run the code inside these brackets".
+
+now next is Processing the Package
+// JSON.parse(message.content.toString()): Remember how the User Service turned object into a "Buffer" (binary code) to send it?.
+Here, we do the opposite: we turn that binary code back into a readable JavaScript object so we can see the to, subject, and body.
+nodemailer.createTransport: This is setting up the connection to the actual email provider (Gmail) using your credentials.
+
+transporter.sendMail(...): This is the moment the email is physically sent into the internet to reach the user's inbox.
+
+finally, channel.ack(message): stands for Acknowledge
+It tells RabbitMQ: "I have successfully sent the email. You can now delete this task from the queue forever".
+If you don't call this, RabbitMQ will think the driver crashed and will send the same email over and over again!
+
+
+SO what is happening?
+1. The "Producer" (User Service Folder)
+The User Service is responsible for generating the OTP and "dropping it off" at the Post Office. It acts as the Producer.
+Action: When a user hits the /login API, this service creates the OTP, saves it to Upstash (Redis) for later verification, and then sends a "To-Do" message to RabbitMQ.
+Why? By offloading the email task, the User Service can respond to the user instantly with "OTP Sent," making the app feel much faster. Key: Uses publishToQueue("send-otp", message) to push data into the queue.
+
+2. The "Consumer" (Mail Service Folder)
+The Mail Service is a dedicated worker that lives in its own "house" and only handles deliveries. It acts as the Consumer.
+Action: It uses channel.consume to sit and watch the send-otp queue 24/7. As soon as a message arrives, it picks it up, translates the data, and uses Nodemailer to send the actual email via Gmail.
+Acknowledgment (channel.ack): Once the email is successfully sent, it tells RabbitMQ to delete the task so it doesn't get sent twice.
+
+now lets setup a TryCatch Wrapper(TryCatch.ts in user/src/config)
+What is it? A Higher-Order Function that acts as a global safety net for all your API routes.
+Why do we use it? To keep your controller files short and readable (no more nested try/catch everywhere).
+To provide a Centralized Error Response. If your code fails, the user always gets a clean JSON message instead of a "Connection Refused" screen or a hanging loader.
+
+How the Code Works (Line-by-Line):
+* const TryCatch = (handler: RequestHandler) -> It takes your "messy" controller logic as an input (the handler).
+-The Input (handler): This is your actual controller code (the logic for logging in or sending an OTP).
+-The Return: It returns a new function that automatically has a try...catch built around it.
+-The Error Logic: If your code inside the handler fails, the catch block here automatically sends a 500 Internal Server Error response back to the user with the error message.
+
+// WITHOUT TryCatch (The old way)
+export const loginUser = async (req, res) => {
+  try {
+    // 10 lines of logic
+  } catch (err) {
+    res.status(500).json({ message: "Error", err });
+  }
+}
+
+// WITH TryCatch (The new, clean way)
+export const loginUser = TryCatch(async (req, res) => {
+  // Just the 10 lines of logic. 
+  // If anything breaks, the "Safety Net" catches it automatically!
+});
+
+return async (req, res, next): It returns a "protected" version of that controller.
+
+await handler(req, res, next): It tries to run your code.
+
+.catch(error): If your code fails, it immediately sends a 500 status code and the error message back to the user's screen.
+
+now in controllers make user.ts and inside that will be the logic for when a user logs in and otp is generated.
+
+the whole userlogin function will be sent to trycatch wrapper. we will extarct email from req.body and will make the ratelimit key which will stay same for an email address everytime then we ask redis to get the value of ratelimit key, if true is there means user cant generate more otp at the curr time and if false-> generate otp.
+//const otp = Math.floor(100000 + Math.random() * 900000).toString();
+this will create a random 6 digit otp then set an otp key and set it in inside redis for 300ms i.e 5min expiry. also set rate limit in redis to true and expiry of 1min.
+create the msg or chit to be dropped and drop in sendotp queue with publishToQueue function and display success msg.
+At this exact moment, the email hasn't actually arrived yet—it's still sitting in the RabbitMQ queue waiting for the Mail Service to pick it up!
+now connect it to an api call on /login route in the routes/user.ts
+
+after all these steps our otp sending service is working correctly.
+
+
+now once the otp is sent we have to verify the user getting that otp.
+so in the same user controller we can make a function in trycatch function named verifyuser. this wwill help us write the logic for verifying the user.
+first extarct the email and enetered otp from req body.
+if anything is not entered give error else verify the otp by making otpkey and checking with redis stored key. if doesnt match or exists-> give error. else otp is correct so delete it and make the user login. but what if the user doesnt already exists?
+so find the user email in the db and if none create a new user.
+after that create a token to give access to user. for that we can create a new file in config folder as we can use token generator again if required in future. also install jsonwebtoken for that.
+just use jwt.sign for the same as we learnt before and also give an expiry date.
+now comign back to our verifyuser u can generate the token from the func made. also make a route in routes folder user file connecting it with verifyuser we just made. now user can successfully login now next step is to display the user profile for which they need to be authenticated.
+
+so make src/middlewares folder and isAuth.ts file
+The `isAuth` middleware is used to protect private routes in the backend. Its job is to check whether a request is coming from a logged-in user. Instead of asking the user to send email or OTP every time, the server gives a JWT token after login, and the client sends this token with every protected request. The middleware reads the token, verifies it, identifies the user, and then allows access to the requested route.
+
+In HTTP, a request has two main parts: the body and the headers. The body contains the actual data (like email or OTP), while headers contain metadata about the request. Login proof is always sent in the headers because it represents permission, not business data. The token is sent in a standard format:
+Authorization: Bearer <token>
+The word “Bearer” simply means the person carrying this token is claiming access.
+
+The file first creates a custom request type called `AuthRequest`. Normally, Express provides a `Request` object that contains body, params, and headers. After authentication, we attach the logged-in user to the request using `req.user`. Since TypeScript does not know this property exists, we extend the request type and add `user: IUser | null`. This allows us to safely use things like `req.user.email` in protected routes without TypeScript errors.
+
+The middleware starts by reading the authorization header using `req.headers.authorization`. This retrieves the token sent by the client. If the header does not exist or does not start with the word “Bearer”, the request is rejected with status 401 Unauthorized because the user is not logged in.
+
+Next, the token itself is extracted by splitting the header string and taking the second part after “Bearer”. After extracting the token, the server verifies it using `jwt.verify(token, JWT_SECRET)`. When the token was originally created during login, the server signed it using a secret key. Verification checks whether the token was created by the server, whether it was modified, and whether it has expired. If any of these checks fail, an error is thrown and access is denied.
+TypeScript does not automatically know the structure of decoded token data, so the result is cast as `JwtPayload`. This tells TypeScript the decoded token contains usable object data, allowing us to safely access properties like `decodedvalue.user`.
+Even after decoding, the middleware checks whether the token actually contains a user object. If not, the request is rejected because a valid token must contain identity information.
+
+Once verified, the middleware attaches the user to the request using `req.user = decodedvalue.user`. This is the most important step because from this point onward, the server knows who made the request. The request changes from an anonymous request into an authenticated user request.
+Then `next()` is called, which allows the request to continue to the actual controller. If any error occurs during verification, the catch block returns a 401 response asking the user to log in again.
+In summary, the middleware receives a request, checks if a token exists, verifies the token, extracts the user identity, attaches the identity to the request, and then allows the protected route to run. Without this middleware, any person could access private data just by knowing someone’s email. With it, only users who possess a valid signed token are allowed.
+
+The main idea is that OTP login proves identity once, and the JWT token proves identity for all future requests. The `isAuth` middleware acts like a security guard that converts an anonymous request into a verified user request.
+
+Whenever a route is written like:
+router.get("/profile", isAuth, controller)
+it means only logged-in users are allowed beyond that point.
+
+# TypeScript Error in isAuth Middleware
+The `isAuth` middleware was typed with a custom `AuthRequest` type instead of
+Express's base `Request` type:
+```ts
+export const isAuth = async (
+  req: AuthRequest,  // ❌ problem was here
+  ...
+)
+```
+Express expects middleware to follow the signature `(req: Request, res: Response, next: NextFunction)`.
+Because `AuthRequest` extends `Request`, TypeScript no longer considers `isAuth` a valid
+`RequestHandler`, causing the red squiggly in the route file when you passed it as middleware.
+## Why Does This Happen? TypeScript uses **structural typing**. Even though `AuthRequest` extends `Request`,
+a function that *requires* `AuthRequest` is NOT assignable to a function that accepts
+a plain `Request` — because the caller (Express) will pass a plain `Request`, which
+doesn't have the `.user` property your middleware expects.
+This is called **contravariance** in function parameter types.
+
+## How It Was Fixed
+**Step 1** — Change the middleware param back to base `Request`:
+export const isAuth = async (
+  req: Request,  // ✅ use base type
+  res: Response,
+  next: NextFunction
+)
+**Step 2** — Cast to `AuthRequest` only when setting `.user`:
+(req as AuthRequest).user = decodedvalue.user;  // ✅ cast at point of use
+
+**Step 3** — In controllers, cast when reading `.user`:
+const user = (req as AuthRequest).user;  // ✅ cast at point of use
+
+now next we can make an updatename feature which can be used to change the default name of the user. so go to user controller and add the function which first identifies which user is making the request. It reads the authenticated user’s id from the request object (added earlier by the authentication middleware after verifying the JWT token). Using this id, it queries the database with User.findById to fetch the actual user document. This ensures we trust the identity stored in the token instead of trusting data sent by the client.
+If no user is found in the database, the function stops execution and returns a 404 response saying the user does not exist. This protects against cases where a token is valid but the database record was deleted.
+If the user exists, the function updates the name field using the value received in req.body.name. At this moment the change only exists in memory. The user.save() call then permanently writes the updated name to the database.
+After updating the name, a new JWT token is generated using generateToken(user). This is done because tokens usually contain user information, and after a profile change the old token may contain outdated data. Issuing a fresh token keeps the client’s identity data consistent.
+
+now we have to make getuser and getallusers. thats it we are done with the user service now we can proceed with chat service.
+
+
+now for chat service: npm i -D @types/express @types/dotenv @types/jsonwebtoken @types/mongoose @types/axios and normal versions too.
+Here are short plain-text notes you can paste 👇
+
+
+Axios and CORS are different things that work at different levels in a web application.
+Axios is a JavaScript HTTP client used by the frontend to send API requests to the backend. It acts as the communication tool between the UI and the server. Developers use Axios to perform actions like login, fetch profile data, send tokens, and update information. It simply asks the browser to send a request and then returns the response to the code.
+
+CORS (Cross-Origin Resource Sharing) is a browser security mechanism. It does not send requests. Instead, it controls whether the browser is allowed to read the response returned by the server. If the backend does not explicitly allow the frontend’s origin, the browser blocks the response even though the server executed the request successfully.
+
+The request flow is:
+Frontend → Axios sends request → Browser performs security check (CORS) → Server processes request → Browser checks permission again → Frontend receives or is blocked from response.
+Axios problems mean the request was not made correctly.
+CORS problems mean the request was made successfully but the browser refused to give the response to the frontend.
+In short, Axios sends requests while CORS decides whether the frontend can access the response.
+
+now in chat/src/index.ts we can start writing our code.
+now chat.ts in models folder in src:
+This file defines the Chat model of the application. A model represents how chat conversations are structured, stored, and accessed in MongoDB using Mongoose.
+First, an interface named `IChat` is created. The interface does not create any database data. It only helps TypeScript understand the shape of a chat object when it is used inside the code. The interface extends `Document`, which means every chat object returned from the database will behave like a MongoDB document and will have built-in methods such as `save`, `deleteOne`, and `populate`.
+
+The `IChat` interface contains:
+* `users`: an array of strings representing user IDs participating in the chat
+* `latestMessage`: an object containing a preview of the last message (text, sender, timestamp)
+* `createdAt` and `updatedAt`: timestamps automatically managed by MongoDB
+
+After defining the interface, a Mongoose Schema is created. The schema is the real rulebook that MongoDB follows while storing data. Unlike the interface (which is compile-time only), the schema works at runtime and ensures only correctly structured chat documents are saved.
+The schema defines:
+* `users` as a required array of strings
+* `latestMessage` as an embedded object with text, sender, and timestamp
+* `timestamp` inside latestMessage defaults to the current time
+* `{ timestamps: true }` automatically adds `createdAt` and `updatedAt` fields and keeps them updated
+
+The reason `latestMessage` is stored inside the chat is for performance. When displaying a chat list, the application only needs the last message preview instead of loading the entire message history.
+Finally, the model is created using `mongoose.model`. This converts the schema into an actual database tool that can perform operations like creating chats, finding chats, updating chats, and deleting chats.
+So the flow of this file is:
+TypeScript interface defines the expected shape → Mongoose schema enforces database structure → Model provides functions to interact with the database.
+
+now time for controller -> src/controllers/chat.ts
+also make config folder and same db.ts and TryCatch.ts as in user service, we can simply copy paste files. db.ts is for the connection with db and hence we can store chats in db. also the controller we were making is in create new chat needs an authenticated req so first auth middleware also needed. so isAuth.ts is made in the smae way as in user service.
+
+in controller we can extract user's id and ask for other user id with whom they wanna chat. then using the chat model we created we can find an existing chat consisting of users:[myid, other userid] if it exists show that chat else create a new chat and return msg + chatid.
+then in chat.routes.ts we can make a route for creating a new chat which passes through isAuth middleware.
+
+now we can make a new feature in controller to getallchats.
+
+lets first make the feature for unseen msg count which is visible on a chat before opening it. models/msg.model.ts. so we created an interface/blueprint for how a msg should look like:
+like chatid, sender, text or image, seen or not seen, etc. then for the same interface we create a schema which will have to incorporate the same blueprint with some rules or constraints, with same features or properties as in interface. then make model and export it. msg model is imp to communicate with msg db to proceed with the chat.
+now back to chat controller. This controller fetches the complete chat list for the logged-in user and prepares it in a UI-ready format.
+First, the controller extracts the logged-in user’s id from `req.user`. This value is attached by the authentication middleware after decoding the JWT token. If the user id is missing, the request is rejected with a 401 Unauthorized response.
+
+Next, the database is queried to find all chats containing this user. The query searches inside the `users` array of each chat document and returns every convo the user is in. The results are sorted by `updatedAt` in descending order so that the most recently active chats appear first
+After fetching chats, the controller enriches each chat with additional information. This is done using `map` along with `Promise.all`. The `map` function transforms each chat into a new object containing extra data, and `Promise.all` allows all asynchronous operations to run in parallel instead of sequentially. This significantly improves performance because multiple db and service calls can happen simultaneously.
+
+For each chat, the controller determines the “other user”. A chat contains two users, but the interface should display the person the current user is talking to, not the current user themselves. Therefore, it finds the id in the `users` array that is not equal to the logged-in user’s id.
+Then it calculates the unread message count. It queries the msg collection and counts documents where the chat id matches, the msg is not marked as seen, & the sender is not the current user.
+The controller then requests profile details from the user service using an HTTP request. The chat service only stores user ids, not names or profile data. Therefore it calls another backend API using axios to retrieve user information such as name, email. This is an example of service-to-service communication in a microservice architecture. Services never directly access another service’s database; they communicate through APIs.
+The result is combined into a new object containing two parts: user data received from the user service and chat data from the database. The chat document is converted into a plain JavaScript object using `toObject` because Mongoose documents contain internal methods that should not be sent to the frontend. Additional fields like latest message and unread count are added to make the response ready for display.
+
+If the user service request fails, the controller catches the error and still returns the chat with a fallback user object labeled “Unknown User”. This prevents the entire chat list from failing if another service is temporarily unavailable and ensures graceful degradation.
+Finally, after processing all chats, the controller returns a JSON response containing the fully prepared chat list. The frontend receives complete sidebar data in a single request instead of making many individual calls, improving performance and reducing complexity.
+
+now we can mke a controller for sending a new msg where we can send an image file as content too so first lets setup multer.
+middlewares/multer.ts 
+This step adds support for file and image uploads in the chat application. Instead of storing files directly in the database or on the server, the app uploads media to a cloud storage service and saves only the file URL in the database.
+`multer` is middleware that allows Express to receive files sent using `multipart/form-data`. Without multer, the backend cannot read uploaded files from a request.
+`cloudinary` is a cloud media storage service. Uploaded images or files are stored on Cloudinary servers, and the backend receives a public URL. The database stores this URL instead of the actual file, making the app faster and scalable.
+`multer-storage-cloudinary` connects multer directly to Cloudinary. It uploads files immediately after receiving them, so the server does not need to temporarily save or manually upload files.
+The data flow becomes: client uploads file → multer reads file → file sent to Cloudinary → Cloudinary returns URL → URL stored in database.
+`@types/multer` provides TypeScript definitions for multer. There is no `@types/multer-storage-cloudinary` package because that library already includes its own types.
+
+This setup allows chat messages to support images and attachments while keeping the backend lightweight and efficient.
+so we can install all these in the chat service.
+
+now setup cloudinary acc to the documentation they have given in config/cloudinary.ts
+multer.ts: This file configures image uploading using multer & Cloudinary.
+
+`CloudinaryStorage` is used as the storage engine so uploaded files are sent directly to Cloudinary instead of being saved on the server. All images are stored inside the `chat-images` folder in Cloudinary.
+Allowed formats are limited to jpg, jpeg, png, gif, and webp to prevent unsupported or unsafe files. Cloudinary transformations automatically resize images to a maximum of 800×800 pixels and optimize quality to reduce file size and bandwidth usage.
+A `fileFilter` checks the file type before upload and rejects anything that is not an image. This protects the server from invalid uploads like videos or executables.
+so Multer middleware is created with:
+* Cloudinary storage
+* Maximum file size limit of 5MB
+* Image-only filter
+After this middleware runs, the controller receives the uploaded file’s Cloudinary URL in `req.file` and can store that URL in the database instead of storing the actual file.
+connect using `router.post("/message", isAuth, upload.single("image"), sendNewMsg)` in routes file.
+
+'now continuing on the send new msg controller.A new message can be text, image, or both.
+
+STEP 1 — GET REQUEST DATA
+We first extract data from the request.
+senderId = req.user?._id → comes from JWT auth (isAuth)
+chatId = req.body.chatId → identifies which chat this msg belongs to
+text = req.body.text → message text content
+imagefile = req.file → image uploaded through multer (if any)
+
+STEP 2 — BASIC VALIDATIONS
+We stop early if request is invalid.
+If senderId missing → 401 Unauthorized: Means user not logged in
+If chatId missing → 400 Bad Request: Means server doesn’t know where to send message
+If both text AND image missing → 400 Bad Request: We do not allow empty messages
+
+STEP 3 — CHECK CHAT EXISTS
+We search database: chat = await chatModel.findById(chatId)
+If not found → 404 Chat not found
+
+STEP 4 — VERIFY USER IS MEMBER OF CHAT
+We check if logged in user is part of the chat
+F:403 Forbidden; User trying to send msg in someone else's chat
+
+STEP 5 — FIND THE RECEIVER
+Each chat contains two users. We find the other person: otherUserId = user in chat.users who is NOT senderId
+
+STEP 6 — PREPARE MESSAGE OBJECT
+We build message data dynamically.Base message structure:
+chatId, sender, seen = false, seenAt = undefined
+If message contains image: store image url and publicId, set messageType = "image", set text = text OR empty string
+If message contains only text:set text, set messageType = "text"
+
+
+STEP 7 — SAVE MESSAGE IN DATABASE
+Create mongoose document: msg = new msgModel(msgData)
+Then store: savedMsg = await msg.save()
+Now message permanently stored in database
+
+STEP 8 — UPDATE CHAT PREVIEW (LATEST MESSAGE)
+Chat list should show last message like WhatsApp.
+If image: latestMessage = "Sent an image 📷"
+Else: latestMessage = text; Update database using: findByIdAndUpdate, We use update instead of chat.save() because:
+faster, updates only selected fields, avoids overwriting document
+
+STEP 9 — SEND RESPONSE
+Frontend immediately receives new message.
+
+next up we can make a controller for viewing or getting all the messages. mark all the unseen msgs to seen and and display the whole chat msgs and sender profile.
+
+**FRONTEND**
+now we are going to make the frontend. in terminal open frontend folder and we will use next js for that.
+go to next.js on google for documentation. from there we installed next js by `npx create-next-app@latest`
+with all yes just turbopack no. nextapp will gte installed.
+next up we can do npm run dev in my-app folder and then we will get the link to access the frontend.
+now in page.tsx file delete everything and just write rafce for boilerplate. next global.css keep import line only rest delete. next in layout.tsx remove fonts and import font and change app name.
+now make pages. so folder name chat in app folder. make page.tsx and rafce. also `Tailwind CSS IntelliSense` extension for ease. when we GET /chat we can see ChatApp coming which is one page/route we made. now in main page.tsx which is our homepage we want to redirect to the chat page so we can use navigation and directly do `return redirect("/chat")` this way whenever homepage is opened we will be auto redirected to /chat.
+now next installations-> js-cookie, @types/js-cookie, lucide-react (icons), react-hot-toast, axios.
+
+Next.js is a React framework that gives structure and built-in features on top of React so we don’t have to configure everything manually. When we ran npx create-next-app@latest, it created a complete frontend project with React, TypeScript, Tailwind CSS, routing system, and a development server already configured. In Next.js (App Router), routing is folder-based, which means folder names inside the app directory automatically become URLs. For example, app/page.tsx becomes the homepage (/) and app/chat/page.tsx becomes /chat. The page.tsx file is just a normal React component, and layout.tsx wraps all pages and acts like the outer structure of the app.
+
+We used redirect("/chat") in the homepage so that whenever the root URL opens, it automatically navigates to the chat page. Tailwind is used for styling directly inside className instead of writing separate CSS files. We installed axios to communicate with the backend APIs, js-cookie to store authentication tokens in browser cookies, lucide-react for icons, and react-hot-toast for showing popup notifications. In Next.js App Router, components run on the server by default, so whenever we need to use React hooks like useState or useEffect, we must add "use client" at the top to make the component run in the browser.
+
+now lets make our login page, so folder-> login make file named page.tsx and rafce in it. then we wrote tailwind classes to make the ui for login page.
+This LoginPage component is a client-side component in Next.js, enabled by writing "use client" at the top because it uses React hooks and browser-based features. It manages two pieces of state: email (to store the user’s input) and loading (to control button behavior and show a spinner during API calls). The useRouter hook from Next.js is used for navigation after successful login. When the form is submitted, the handleSubmit function prevents page refresh, sets loading to true, and sends a POST request to the backend login endpoint using axios with the entered email. If the request succeeds, it shows a success message and redirects the user to the /verify page with the email passed as a query parameter. If an error occurs, it safely displays either the backend error message or a generic network error message using optional chaining to prevent crashes. Finally, loading is reset to false regardless of success or failure.
+The form is controlled, meaning the input field value is tied to React state using value and onChange, ensuring React manages the input data. The submit button is disabled when loading is true to prevent multiple submissions, and it conditionally renders either a spinner with “Sending Verification Code...” or the normal “Send Verification Code” button text. Overall, this component handles OTP login flow by collecting user email, sending it to the backend, handling success or error responses, and navigating the user to the verification step while maintaining proper UI feedback and error handling.
+
+** React basics + rendering and suspense concepts:
+React is a JavaScript library used to build interactive user interfaces. Instead of manually updating HTML when something changes, React automatically updates the UI when data changes. In React, the UI is treated as a function of data. If the data changes, React re-renders the component and updates what the user sees. This makes building dynamic applications like login pages, chat apps, and dashboards much easier.
+
+A component in React is simply a function that returns UI. Every part of the interface can be broken into components, such as a LoginPage, Navbar, or ChatBubble. Components can have their own logic and state. React components re-render whenever their state changes.
+
+State is a special type of variable that React tracks. It is created using a hook called useState. When you write const [email, setEmail] = useState(""), React creates a tracked variable called email and gives you a function called setEmail to update it. You must use setEmail to change the value because React needs to know when state changes in order to re-render the component. If you used a normal variable like let email = "", React would not track it and the UI would not update properly.
+
+Hooks are special functions in React that give components extra capabilities. useState gives memory (state). Other hooks like useEffect, useRouter, and useSearchParams connect components to browser behavior or routing. Hooks only work inside components.
+
+In Next.js App Router, components are Server Components by default. Server Components run on the server before the page is sent to the browser. They cannot use useState or other browser-only features because there is no user interaction on the server. The server simply prepares HTML and sends it. If a component needs interaction, like typing or clicking, we add "use client" at the top. This tells Next.js that the component must run in the browser.
+
+Server-side rendering means the server builds the HTML before sending it to the browser. The server can wait for async operations like await fetch before sending the page. This waiting is safe because the user does not see it happening. In contrast, client-side rendering happens in the browser, where the user can see the page rendering in real time.
+
+Suspense is a React feature used when rendering depends on something asynchronous. It provides a fallback UI while React waits for something needed during rendering. Suspense is not required for event-based async operations like axios inside a button click or useEffect, because those run after rendering. Suspense is needed when something affects rendering itself and React may need to pause before completing the UI.
+
+There are three types of async situations. Event async happens after rendering, like an API call inside a click handler. This does not require Suspense. Server render async happens inside a Server Component using await fetch; the server waits before sending the page, so Suspense is not required. Client render async happens when rendering depends on async data in a Client Component; in this case, Suspense may be required to provide a fallback UI while React waits.
+
+useSearchParams in Next.js can require Suspense because routing data may not be fully resolved during certain rendering phases in the App Router. Suspense acts as a safety boundary to handle that rendering dependency properly.
+
+Overall understanding: Server rendering can wait privately before the user sees anything. Client rendering happens in front of the user, so React needs controlled ways to handle async dependencies during rendering. Suspense provides that control.
+
+When a user visits a URL like /verify?email=abc, the full URL including the query parameter is sent to the Next.js server. In the App Router, pages are Server Components by default, so the server begins rendering the page first. If the page wraps a Client Component inside a Suspense boundary, the server renders the outer structure and sends HTML to the browser, but it does not execute client-side hooks like useSearchParams. Instead, it sends a placeholder where the Client Component will later hydrate.
+
+After the HTML reaches the browser, React begins hydration. Hydration means React activates the page by attaching JavaScript behavior to the existing HTML. Now the Client Component runs in the browser. At this point, useSearchParams executes and reads the query parameter directly from the browser’s URL. If the routing context is fully ready, the component renders immediately. If the routing system is still being resolved during hydration, React may temporarily pause rendering that component. This pause is called suspension. Suspense provides a fallback UI during that pause, ensuring React has a safe boundary while waiting.
+
+so now since we want our query parameter email from the routing context we need to wrap the verify page inside a suspense. so lets make folder components and file verifyOtp inside it. now make a verify folder and inside page.tsx, this will return the same ui as the login page.
+
+** REACT + NEXT.JS BASICS
+JSX (JavaScript XML) is a syntax used in React that allows us to write HTML-like code inside JavaScript. It is used to describe the UI structure of a component. For example, instead of writing complicated JavaScript like React.createElement(), we can simply write HTML-like elements such as <div>, <h1>, etc. JSX is not actually HTML; it is converted into normal JavaScript by React during compilation. JSX also allows embedding JavaScript expressions inside curly braces {}. 
+Ex: <h1>Hello {name}</h1>. In React components, the UI that we return inside the return statement is written using JSX.
+It makes UI code readable & allows js logic and UI struc to live in the same place.
+
+React Component is simply a JavaScript function that returns JSX. Each component represents a piece of the UI. Example: a LoginPage component, Chat component, or Message component. Components allow us to break the UI into reusable pieces. React renders these components and updates the UI whenever the component's state changes.
+
+useState is a React hook used to store data that can change and affect what is shown on the screen. When the state changes, React re-renders the component and updates the UI.
+Example idea: email input value, timer value, OTP digits, loading state
+When the state updates, React automatically updates the UI.
+state variable → stores current value
+setState function → updates the value
+Updating state triggers a re-render.
+
+useRef is a React hook that stores a reference (pointer) to something. It is commonly used to access DOM elements directly or store values that should persist between renders without causing a re-render.
+useRef does not trigger re-render when its value changes.
+
+Two main uses of useRef:
+1. Accessing DOM elements
+   Sometimes we need direct control of an element, like focusing an input, scrolling a container, or playing a video. React normally avoids direct DOM manipulation, but useRef provides a safe way to access a specific element.
+
+example: focus an input field, scroll to bottom of chat, control video playback
+useRef acts like a pointer or reference to the element.
+ref.current refers to the actual element.
+
+2. Storing values without re-render
+   useRef can also store values that persist across renders but do not need to update the UI.
+
+Example uses: timers, previous values, DOM references
+Why useRef exists (React vs normal JavaScript)
+In normal JavaScript, we can directly access elements using things like getElementById. However, React manages the UI using a virtual representation of the DOM and prefers updates through state changes. Because of this, direct DOM access is restricted. When we truly need to interact with an element directly, React provides useRef as the safe way to do it.
+So instead of directly grabbing elements from the DOM, we attach a reference to the element using useRef and then access it through ref.current.
+
+useRouter is a Next.js hook used to control navigation between pages.
+Example: router.push("/chat")
+This programmatically navigates the user to another page.
+It is commonly used after login or form submission.
+
+useSearchParams is used to read query parameters from the URL.
+Example URL: /verify?email=[abc@gmail.com](mailto:abc@gmail.com)
+Query parameter: email = [abc@gmail.com](mailto:abc@gmail.com)
+useSearchParams allows the component to read that value from the URL.
+Example : const email = searchParams.get("email")
+
+This is how the verify page receives the user's email from the login page.
+
+Routing context refers to the information provided by the router about the current page.
+
+It includes things like: current route, query parameters, navigation state, dynamic route parameters
+Hooks such as useRouter(), useSearchParams(), and useParams() access this routing information. This routing information is provided by the Next.js router system.
+
+Summary:
+JSX is used to describe UI in React using HTML-like syntax.
+Components are functions that return JSX.
+useState stores data that affects UI and triggers re-render.
+useRef stores references to elements or values without re-rendering.
+Next.js routing is based on folder structure.
+useRouter allows navigation between pages.
+useSearchParams reads query parameters from the URL.
+Routing context contains information about the current route.
+React Context shares data between components.
+Suspense handles situations where required data is not ready during rendering.
+Client components run in the browser and allow interactive features.
+
+verify/page.tsx contd...
+this page will be the verify page where user enters the recieved otp in verufyotp page that otp will be checked but here it is entered by user.
+lets firts make an app context. context folder -> AppContext.tsx.
+
+Got it 👍 I’ll write **clean plain-text notes (no markdown)** so you can paste them directly into your `.txt` file like you prefer.
+
+---
+
+REACT CONTEXT (AppContext FILE) – NOTES
+
+Purpose
+The AppContext file creates a global state for the frontend application. Instead of passing important data like user information, authentication status, chats, and users through props across many components, React Context allows all components inside the application to access the same shared data. This prevents prop drilling and keeps the code organized.
+
+Concept of Context
+React Context works like a global storage box. A Provider component fills this box with data, and any component inside the Provider can read the data using useContext (or a helper hook like useAppData). This makes shared data easily accessible throughout the app.
+
+Service URLs
+The file defines two constants: user_service and chat_service. These are base URLs of the backend microservices. The user service handles authentication and user data, while the chat service handles chat and message related APIs.
+
+Interfaces (TypeScript Data Shapes)
+Interfaces define the expected structure of data objects so TypeScript can check correctness while coding.
+
+User interface
+Represents a user object with properties:
+_id (string) – unique user id from database
+name (string) – user’s name
+email (string) – user’s email
+
+Chat interface
+Represents a chat document stored in the database. It contains:
+_id – chat id
+users – array of user ids participating in the chat
+latestMessage – object containing text and sender id
+createdAt and updatedAt timestamps
+optional unseenCount for unread messages
+
+Chats interface
+Represents the data returned to the frontend for displaying chats. It combines user information and chat information together.
+
+AppContextType interface
+Defines the structure of the global context object. It includes both data and functions available globally.
+
+Important properties include:
+user – currently logged-in user (User or null)
+loading – indicates whether authentication check is in progress
+isAuth – boolean showing if user is logged in
+
+State update functions:
+setUser – updates the user state
+setIsAuth – updates authentication status
+setChats – updates chats state
+
+Async functions:
+logoutUser – logs out the user and clears token
+fetchUsers – fetches all users for starting chats
+fetchChats – fetches chat list for sidebar
+
+Data collections:
+chats – list of chats visible in sidebar
+users – list of all users available for chat
+
+React.Dispatch and SetStateAction
+Expressions like
+React.Dispatch<React.SetStateAction<User | null>>
+represent the type of React state update functions returned by useState. These are simply functions used to update state values such as setUser or setChats.
+
+Example concept
+const [user, setUser] = useState(null)
+Here setUser is typed internally as React.Dispatch<SetStateAction<User | null>>.
+
+Context Creation
+createContext is used to create the AppContext object. Initially it is empty. The context type ensures the values inside the context follow the structure defined by AppContextType.
+
+AppProvider Component
+AppProvider is a wrapper component that stores global state using useState and provides it to the entire application.
+
+Important states inside AppProvider:
+user – stores logged-in user data
+isAuth – stores authentication status
+loading – indicates whether authentication check is happening
+chats – stores chat list
+users – stores list of available users
+
+fetchUser Function
+This function checks whether the user is already logged in. It reads the JWT token stored in cookies and sends a request to the user service endpoint /api/v1/me. If the token is valid, the server returns the user data. The user state and authentication state are then updated.
+
+logoutUser Function
+Logs out the user by removing the token from cookies, clearing the user state, setting isAuth to false, and showing a success toast notification.
+
+fetchChats Function
+Fetches all chats belonging to the logged-in user from the chat service endpoint /api/v1/chat/all. The returned chat list is stored in the chats state.
+
+fetchUsers Function
+Fetches all available users from the user service endpoint /api/v1/user/all so the user can start new conversations.
+
+useEffect in Provider
+When the application loads, useEffect automatically runs fetchUser, fetchChats, and fetchUsers once. This initializes the global state by loading user information and chat data.
+
+Provider Value
+The AppContext.Provider wraps the application and supplies the context values. The value object contains all global states and functions (user, setUser, isAuth, fetchChats, fetchUsers, etc.). Any component inside the provider can access these values.
+
+children: ReactNode
+The provider receives children which represent all components inside the AppProvider. ReactNode is a type that represents any renderable React content such as components, elements, text, or fragments.
+
+useAppData Hook
+useAppData is a custom hook that simply calls useContext(AppContext). It allows components to easily access the context without repeatedly writing useContext(AppContext). It also throws an error if used outside the provider to prevent incorrect usage.
+
+---
+
+VERIFY OTP PAGE – NOTES
+
+Purpose
+The VerifyOtp component is responsible for verifying the OTP sent to the user's email during login. It collects the OTP entered by the user, sends it to the backend for verification, stores the authentication token if verification succeeds, and redirects the user to the chat page.
+
+Client Component
+The file starts with "use client" because the component uses React hooks like useState, useEffect, and browser features such as cookies and event handling. In Next.js App Router, these features require the component to run on the browser instead of the server.
+
+Accessing Global Context
+The component uses useAppData to access the global context. From this context it extracts authentication state, user setter functions, and helper functions to fetch chats and users. These values come from the AppContext file.
+
+State Variables
+loading – indicates whether OTP verification request is running
+otp – array storing six OTP digits
+error – stores error message to display in UI
+resendLoading – indicates whether resend OTP request is running
+timer – countdown timer for resend OTP
+
+useRef for Input Elements
+useRef stores references to the six OTP input fields. This allows the program to automatically move the cursor to the next input when a digit is typed or move to the previous input when backspace is pressed.
+
+Getting Email from URL
+useSearchParams reads query parameters from the URL. The email parameter is passed from the login page when redirecting to the verify page. Example URL: /verify?email=[user@gmail.com](mailto:user@gmail.com).
+
+OTP Timer Logic
+A useEffect hook decreases the timer value every second using setInterval. When the timer reaches zero, the user is allowed to request a new OTP.
+
+Handling OTP Input
+handleInputChange updates the OTP array when a digit is typed. It ensures only one character can be entered per input box. After entering a digit, the focus automatically moves to the next input field.
+
+Backspace Navigation
+handleKeyDown detects when the user presses backspace on an empty input. In this case the focus moves to the previous input box so the user can delete the previous digit.
+
+Paste OTP Feature
+handlePaste allows users to paste a full OTP (for example from an email). It extracts only numeric characters, limits them to six digits, fills all input boxes, and moves the focus to the last input.
+
+Submitting OTP
+handleSubmit runs when the user clicks the Verify button. It combines the six OTP digits into a single string and sends a POST request to the user service endpoint /api/v1/verify. The request contains the email and OTP.
+
+Successful Verification
+If the backend verifies the OTP successfully, the server returns a JWT token and user data. The token is stored in browser cookies using js-cookie. The user state and authentication state are updated in the global context. After that the app fetches chats and users and redirects the user to the chat page.
+
+Error Handling
+If the verification request fails, the error message returned by the backend is displayed to the user.
+
+Resending OTP
+handleResendOtp sends another login request to the backend to generate a new OTP. After a successful response, the resend timer resets to 60 seconds.
+
+Authentication Redirect
+A useEffect hook watches the isAuth state. If the user becomes authenticated, the router automatically navigates to the chat page.
+
+Loading State
+If user authentication data is still loading, the component returns the Loading component instead of rendering the page.
+
+Overall Flow
+User enters email on login page → backend generates OTP → user receives OTP via email → verify page collects OTP → frontend sends OTP to backend → backend verifies OTP using Redis → server returns JWT token → token stored in cookies → authentication state updated → user redirected to chat page.

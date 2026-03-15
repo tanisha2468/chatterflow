@@ -1,0 +1,22 @@
+Frontend (Next.js, react)
+       ↓
+User Service (Node.js)
+- Login
+- OTP
+- User Management
+       ↓
+Redis
+(OTP Storage)
+       ↓
+RabbitMQ
+(Email Queue)
+       ↓
+Mail Service
+(Sends OTP)
+--------------------
+Chat Service
+- Chats
+- Messages
+- Socket.IO
+       ↓
+MongoDB
