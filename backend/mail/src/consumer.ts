@@ -8,12 +8,12 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export const startSendOtpConsumer = async () => {
   try {
     const connection = await amqp.connect({
-      protocol: "amqp",
+      protocol: "amqps",
       hostname: process.env.RABBITMQ_HOST,
-      port: 5672,
+      port: 5671,
       username: process.env.RABBITMQ_USERNAME,
       password: process.env.RABBITMQ_PASSWORD,
-      vhost: process.env.RABBITMQ_VHOST,
+      vhost: process.env.RABBITMQ_VHOST || "/",
     });
 
     const channel = await connection.createChannel();
