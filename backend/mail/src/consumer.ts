@@ -1,17 +1,18 @@
 import amqp from "amqplib";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import dotenv from "dotenv";
 dotenv.config();
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const startSendOtpConsumer = async () => {
   try {
     const connection = await amqp.connect({
-      protocol: "amqps",
+      protocol: "amqp",
       hostname: process.env.RABBITMQ_HOST,
-      port: 5671,
+      port: 5672,
       username: process.env.RABBITMQ_USERNAME,
       password: process.env.RABBITMQ_PASSWORD,
-      vhost: process.env.RABBITMQ_VHOST || "/",
     });
 
     const channel = await connection.createChannel();
@@ -27,18 +28,8 @@ export const startSendOtpConsumer = async () => {
         try {
           const { to, subject, body } = JSON.parse(msg.content.toString());
 
-          const transporter = nodemailer.createTransport({
-            host: "smtp.gmail.com",
-            port: 465,
-            secure: true, //for aws
-            auth: {
-              user: process.env.EMAIL_USER,
-              pass: process.env.EMAIL_PASS,
-            },
-          });
-
-          await transporter.sendMail({
-            from: "Chat app",
+          await resend.emails.send({
+            from: "Chat app <onboarding@resend.dev>",
             to,
             subject,
             text: body,
