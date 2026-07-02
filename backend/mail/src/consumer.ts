@@ -1,9 +1,6 @@
 import amqp from "amqplib";
-import { Resend } from "resend";
 import dotenv from "dotenv";
 dotenv.config();
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const startSendOtpConsumer = async () => {
   try {
@@ -17,11 +14,8 @@ export const startSendOtpConsumer = async () => {
     });
 
     const channel = await connection.createChannel();
-
     const queueName = "send-otp";
-
     await channel.assertQueue(queueName, { durable: true });
-
     console.log("✅ Mail Service consumer started, listening for otp emails");
 
     channel.consume(queueName, async (msg) => {
@@ -29,12 +23,24 @@ export const startSendOtpConsumer = async () => {
         try {
           const { to, subject, body } = JSON.parse(msg.content.toString());
 
-          await resend.emails.send({
-            from: "Chat app <onboarding@resend.dev>",
-            to,
-            subject,
-            text: body,
+          const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "api-key": process.env.BREVO_API_KEY as string,
+            },
+            body: JSON.stringify({
+              sender: { email: "tanishagoyal2468@gmail.com", name: "chatapp" },
+              to: [{ email: to }],
+              subject,
+              textContent: body,
+            }),
           });
+
+          if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Brevo error: ${response.status} ${errText}`);
+          }
 
           console.log(`OTP mail sent to ${to}`);
           channel.ack(msg);
